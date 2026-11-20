@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from scripts.check_comments import code_comments, file_comments, js_comments
+from scripts.check_comments import code_comments, file_comments, js_comments, yaml_comments, shell_comments
 
 
 class CommentLintTest(unittest.TestCase):
@@ -16,6 +16,17 @@ class CommentLintTest(unittest.TestCase):
 
     def test_js_module_without_comment(self):
         self.assertEqual(js_comments('export const status = "ok";'), [])
+
+    def test_config_and_script_comments(self):
+        self.assertEqual(yaml_comments('steps:\n  - run: |\n      echo "# literal"\n    name: CI # remove'), [4])
+        self.assertEqual(shell_comments('#!/bin/sh\nprintf "%s" "# literal"\ntrue;# remove'), [3])
+        self.assertEqual(shell_comments('printf "\\\"# literal"\ntrue # remove'), [2])
+
+    def test_python_comment(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "check.py"
+            path.write_text('url = "https://example.test/#literal"\n# remove\n')
+            self.assertEqual(file_comments(path), [2])
 
     def test_css_string_and_comment(self):
         self.assertEqual(code_comments('a::after{content:"/* literal */"} /* remove */'), [1])
