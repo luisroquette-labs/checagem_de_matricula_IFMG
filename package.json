@@ -1,0 +1,11 @@
+{
+  "private": true,
+  "scripts": {
+    "preflight:ci": "bash scripts/preflight.sh",
+    "lint:comments": "python3 scripts/check_comments.py"
+  },
+  "devDependencies": {
+    "acorn": "8.15.0",
+    "yaml": "^2.9.1"
+  }
+}
