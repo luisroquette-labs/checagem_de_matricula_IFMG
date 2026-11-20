@@ -1,11 +1,12 @@
 from html.parser import HTMLParser
 from pathlib import Path
+import json
 import subprocess
 import sys
 from xml.parsers import expat
 
 
-def code_comments(source: str, language: str) -> list[int]:
+def code_comments(source: str) -> list[int]:
     lines = []
     line = 1
     quote = ""
@@ -20,7 +21,7 @@ def code_comments(source: str, language: str) -> list[int]:
                 continue
             if char == quote:
                 quote = ""
-        elif char in {'"', "'", "`"}:
+        elif char in {'"', "'"}:
             quote = char
         elif source.startswith("/*", index):
             lines.append(line)
@@ -29,13 +30,14 @@ def code_comments(source: str, language: str) -> list[int]:
             line += source[index:next_index].count("\n")
             index = next_index
             continue
-        elif language == "script" and source.startswith("//", index):
-            lines.append(line)
-            end = source.find("\n", index + 2)
-            index = len(source) if end < 0 else end
-            continue
         index += 1
     return lines
+
+
+def js_comments(source: str) -> list[int]:
+    checker = Path(__file__).with_name("check_js_comments.cjs")
+    result = subprocess.check_output(["node", str(checker)], input=source.encode())
+    return json.loads(result)
 
 
 class PageComments(HTMLParser):
@@ -57,7 +59,8 @@ class PageComments(HTMLParser):
 
     def handle_data(self, data):
         if self.language:
-            self.lines.extend(self.getpos()[0] + line - 1 for line in code_comments(data, self.language))
+            scanner = js_comments if self.language == "script" else code_comments
+            self.lines.extend(self.getpos()[0] + line - 1 for line in scanner(data))
 
 
 def file_comments(path: Path) -> list[int]:
@@ -68,6 +71,10 @@ def file_comments(path: Path) -> list[int]:
         parser.CommentHandler = lambda _: lines.append(parser.CurrentLineNumber)
         parser.Parse(source)
         return lines
+    if path.suffix.lower() == ".js":
+        return js_comments(source)
+    if path.suffix.lower() == ".css":
+        return code_comments(source)
     parser = PageComments()
     parser.feed(source)
     return parser.lines
@@ -75,7 +82,7 @@ def file_comments(path: Path) -> list[int]:
 
 def main() -> int:
     paths = subprocess.check_output(["git", "ls-files", "-z"]).decode().split("\0")
-    failures = [f"{path}:{line}" for path in paths if Path(path).suffix.lower() in {".html", ".svg"} for line in file_comments(Path(path))]
+    failures = [f"{path}:{line}" for path in paths if Path(path).suffix.lower() in {".html", ".svg", ".js", ".css"} for line in file_comments(Path(path))]
     if failures:
         print("Comments forbidden:\n" + "\n".join(failures), file=sys.stderr)
         return 1
