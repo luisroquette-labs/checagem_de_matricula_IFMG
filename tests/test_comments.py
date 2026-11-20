@@ -14,6 +14,9 @@ class CommentLintTest(unittest.TestCase):
     def test_script_regex_and_template(self):
         self.assertEqual(js_comments("const r = /[//]/; const x = /'/; const y = `${1 /* remove */}`;"), [1])
 
+    def test_js_module_without_comment(self):
+        self.assertEqual(js_comments('export const status = "ok";'), [])
+
     def test_css_string_and_comment(self):
         self.assertEqual(code_comments('a::after{content:"/* literal */"} /* remove */'), [1])
 
