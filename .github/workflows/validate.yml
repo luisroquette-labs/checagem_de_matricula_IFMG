@@ -23,5 +23,6 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: python3 -m pip install -r requirements.txt
       - name: Verify published assets and comments
         run: bash scripts/preflight.sh

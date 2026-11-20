@@ -5,6 +5,8 @@ import subprocess
 import sys
 import tokenize
 from io import BytesIO
+from tree_sitter import Language, Parser
+import tree_sitter_bash
 from xml.parsers import expat
 
 
@@ -39,7 +41,7 @@ def code_comments(source: str) -> list[int]:
 def js_comments(source: str) -> list[int]:
     checker = Path(__file__).with_name("check_js_comments.cjs")
     result = subprocess.check_output(["node", str(checker)], input=source.encode())
-    return json.loads(result)
+    return [line for line in json.loads(result) if not (line == 1 and source.startswith("#!"))]
 
 
 def yaml_comments(source: str) -> list[int]:
@@ -50,22 +52,17 @@ def yaml_comments(source: str) -> list[int]:
 
 def shell_comments(source: str) -> list[int]:
     lines = []
-    for number, line in enumerate(source.splitlines(), 1):
-        if number == 1 and line.startswith("#!"):
-            continue
-        quote = ""
-        index = 0
-        while index < len(line):
-            char = line[index]
-            if char == "\\" and quote != "'":
-                index += 2
-                continue
-            if char in {'"', "'"}:
-                quote = "" if quote == char else char if not quote else quote
-            elif char == "#" and not quote and (index == 0 or line[index - 1].isspace() or line[index - 1] in ";|&()"):
+    tree = Parser(Language(tree_sitter_bash.language())).parse(source.encode())
+
+    def visit(node):
+        if node.type == "comment":
+            number = node.start_point.row + 1
+            if not (number == 1 and source.startswith("#!")):
                 lines.append(number)
-                break
-            index += 1
+        for child in node.children:
+            visit(child)
+
+    visit(tree.root_node)
     return lines
 
 
@@ -105,7 +102,7 @@ def file_comments(path: Path) -> list[int]:
     if path.suffix.lower() == ".css":
         return code_comments(source)
     if path.suffix.lower() == ".py":
-        return [token.start[0] for token in tokenize.tokenize(BytesIO(source.encode()).readline) if token.type == tokenize.COMMENT]
+        return [token.start[0] for token in tokenize.tokenize(BytesIO(source.encode()).readline) if token.type == tokenize.COMMENT and not (token.start[0] == 1 and source.startswith("#!"))]
     if path.suffix.lower() in {".yml", ".yaml"}:
         return yaml_comments(source)
     if path.suffix.lower() == ".sh":

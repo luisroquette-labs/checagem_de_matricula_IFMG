@@ -21,6 +21,15 @@ class CommentLintTest(unittest.TestCase):
         self.assertEqual(yaml_comments('steps:\n  - run: |\n      echo "# literal"\n    name: CI # remove'), [4])
         self.assertEqual(shell_comments('#!/bin/sh\nprintf "%s" "# literal"\ntrue;# remove'), [3])
         self.assertEqual(shell_comments('printf "\\\"# literal"\ntrue # remove'), [2])
+        self.assertEqual(shell_comments('cat <<EOF\n# visible heading\nEOF\ntrue # remove'), [4])
+        self.assertEqual(shell_comments('printf "%s" "multi\n# literal"\ntrue # remove'), [3])
+
+    def test_executable_shebangs(self):
+        self.assertEqual(js_comments('#!/usr/bin/env node\nconst x = 1; // remove'), [2])
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "task.py"
+            path.write_text('#!/usr/bin/env python3\nvalue = 1 # remove')
+            self.assertEqual(file_comments(path), [2])
 
     def test_python_comment(self):
         with TemporaryDirectory() as directory:
